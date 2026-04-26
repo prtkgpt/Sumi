@@ -1,0 +1,122 @@
+# Sumi — Engineering Conventions (v0.1)
+
+This file is the source of truth for *how* code in this repo is written. Read it before editing.
+
+## Product
+
+Sumi is a simple bookkeeping app for US small businesses. v0.1 ships only the **onboarding happy path**: marketing landing → sign in → create a business → authenticated dashboard shell with placeholder nav. No transactions, invoices, Plaid, Stripe, or reporting work belongs in v0.1.
+
+## Stack (locked)
+
+- **Runtime / framework:** Next.js 15 (App Router), React 19, TypeScript 5.6+ in strict mode.
+- **Hosting:** Vercel.
+- **Database:** Neon Postgres, accessed via `@neondatabase/serverless` (HTTP) and `drizzle-orm`.
+- **Auth:** Stack Auth (`@stackframe/stack`) — email magic link + Google OAuth.
+- **Styling:** Tailwind CSS v4, shadcn/ui (`new-york` style, CSS variables). Use the shadcn CLI for every primitive — do not hand-roll buttons or inputs.
+- **Forms:** `react-hook-form` + `zod` + `@hookform/resolvers`.
+- **Icons:** `lucide-react`.
+- **Toasts:** `sonner`.
+- **Dates:** `date-fns` + `date-fns-tz`.
+- **Env:** `@t3-oss/env-nextjs` with zod validation.
+- **Package manager:** pnpm 10.x.
+- **Monorepo:** Turborepo with pnpm workspaces.
+
+## Repo layout
+
+```
+/
+├─ apps/
+│  └─ web/                  Next.js app deployed to Vercel
+└─ packages/
+   ├─ db/                   Drizzle schema, migrations, Neon client (shared)
+   └─ types/                Shared TS types
+```
+
+`apps/mobile` (Expo) will be added in a later milestone — do not scaffold it now.
+
+## Environment variables
+
+Validated in `apps/web/src/env.ts`. Do not read `process.env.*` outside that file.
+
+Required at runtime:
+
+```
+DATABASE_URL=                              # Neon pooled connection string
+NEXT_PUBLIC_STACK_PROJECT_ID=
+NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY=
+STACK_SECRET_SERVER_KEY=
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+`packages/db` reads `DATABASE_URL` only when running migrations / Drizzle Studio.
+
+## Non-negotiables
+
+1. **Never** read `process.env` outside `apps/web/src/env.ts` (or `packages/db/src/env.ts`). Next.js inlines stale values; centralize validation.
+2. **Never** import `packages/db` from a Client Component. DB calls go through Server Components, Server Actions, or Route Handlers.
+3. **Always** `await` `cookies()` and `headers()` in Next.js 15.
+4. **Always** validate user input with zod at the Server Action boundary. Client-side validation is UX, not security.
+5. **Always** check the current user (`stackServerApp.getUser()`) at the top of every Server Action and protected Route Handler. Do not trust middleware alone.
+6. **Never** put a `redirect()` inside a `try/catch` that swallows it — `redirect` throws.
+7. **Never** add shadcn components you don't yet use. Keep the UI surface small.
+8. **Never** invent schema. Drizzle definitions in `packages/db/src/schema.ts` are the source of truth. To add a column, edit the schema, generate a migration, and commit both.
+
+## Database conventions
+
+- All tables: `id uuid primary key default gen_random_uuid()`, `created_at timestamptz not null default now()`, `updated_at timestamptz not null default now()` where mutated.
+- Foreign keys explicit with `onDelete` behavior.
+- Tenant scoping via `business_id`. Every tenant-scoped table includes it; queries filter by it.
+- Owner-on-business-create is implemented as a **single Server Action that wraps both inserts in a transaction** (`db.transaction(async tx => { ... })`). No SQL triggers.
+- Migrations live in `packages/db/drizzle/`. Generate with `pnpm --filter @sumi/db db:generate`. Apply with `pnpm --filter @sumi/db db:migrate`.
+
+## Auth conventions
+
+- Stack Auth handler mounted at `apps/web/src/app/handler/[...stack]/page.tsx` per Stack's Next.js quickstart.
+- Server access: `stackServerApp.getUser()` from `@/lib/stack`. Returns `null` if signed out.
+- Client access: `useUser()` from `@stackframe/stack` (in Client Components only).
+- The Stack `<StackProvider>` + `<StackTheme>` wrap the root layout.
+- Sign-out uses Stack's built-in `/handler/sign-out`.
+
+## File naming
+
+- Files: `kebab-case.tsx` / `kebab-case.ts`.
+- React components: `PascalCase` exports.
+- Server actions: `verbNoun` (e.g. `createBusiness`).
+- Route segments: lowercase, App Router conventions.
+
+## Code style
+
+- TypeScript strict mode. No `any` unless justified by a one-line comment.
+- Prefer named exports. Default-export only when Next.js requires it (page/layout/route files).
+- Default to writing no comments. Add a comment only when the *why* is non-obvious.
+- No "// removed for X" or other historical comments — git log is for history.
+- Server Components by default; only mark `'use client'` when you need browser APIs, state, or event handlers.
+
+## Verification
+
+Before declaring v0.1 done, run:
+
+```bash
+pnpm install
+pnpm --filter @sumi/db db:generate     # if schema changed
+pnpm --filter @sumi/db db:migrate      # applies pending migrations to Neon
+pnpm --filter web typecheck            # zero errors
+pnpm --filter web lint                 # zero errors
+pnpm --filter web build                # zero errors
+pnpm dev                               # localhost:3000
+```
+
+Then walk the eight items in the v0.1 definition of done by hand.
+
+## v0.1 definition of done
+
+1. `/` renders a marketing landing page with "Sign in" and "Get started" CTAs.
+2. `/handler/sign-in` (Stack Auth) supports email magic link + Google OAuth.
+3. After first sign-in, a user with no `memberships` row is redirected to `/onboarding`.
+4. `/onboarding` is a single-field form ("What's your business name?"). Submitting it inserts a `businesses` row + an owner `memberships` row in one transaction, and redirects to `/[bizId]/dashboard`.
+5. `/[bizId]/dashboard` renders the authenticated shell (sidebar + top bar with business switcher + user menu) and the text `Welcome, {first_name}`.
+6. Sidebar links Dashboard / Inbox / Invoices / Customers / Reports / Settings all route to a placeholder page that says "Coming soon."
+7. Sign out from the user menu clears the session and returns to `/`.
+8. Unauthenticated access to any `/[bizId]/*` route redirects to sign in.
+
+If a future task expands scope beyond these eight items, **stop and flag it**.
