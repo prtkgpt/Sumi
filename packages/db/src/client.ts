@@ -2,30 +2,31 @@ import { Pool, neonConfig } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import * as schema from './schema';
 
-// Re-use connections across invocations on warm Lambdas / Vercel functions.
 neonConfig.fetchConnectionCache = true;
 
-let cachedPool: Pool | null = null;
-let cachedDb: ReturnType<typeof drizzle<typeof schema>> | null = null;
+type DrizzleClient = ReturnType<typeof drizzle<typeof schema>>;
 
-/**
- * Returns a Drizzle client backed by Neon's serverless WebSocket pool.
- * WebSocket pool is required for interactive transactions
- * (`db.transaction(async tx => ...)`), which the HTTP driver does not support.
- * The connection URL is read lazily so that build-time imports don't crash
- * when DATABASE_URL is absent.
- */
-export function getDb() {
-  if (cachedDb) return cachedDb;
+// Reuse the pool across module reloads (Next.js dev HMR) and across warm
+// invocations on the same Vercel function instance. Without this each HMR
+// reload would leak a Pool and accumulate WebSocket connections.
+const globalForDb = globalThis as unknown as {
+  __sumiPool?: Pool;
+  __sumiDb?: DrizzleClient;
+};
+
+export function getDb(): DrizzleClient {
+  if (globalForDb.__sumiDb) return globalForDb.__sumiDb;
+
   const url = process.env.DATABASE_URL;
   if (!url) {
     throw new Error(
       'DATABASE_URL is not set. Configure it in apps/web/.env.local or Vercel project settings.'
     );
   }
-  cachedPool = new Pool({ connectionString: url });
-  cachedDb = drizzle(cachedPool, { schema });
-  return cachedDb;
+
+  globalForDb.__sumiPool = new Pool({ connectionString: url });
+  globalForDb.__sumiDb = drizzle(globalForDb.__sumiPool, { schema });
+  return globalForDb.__sumiDb;
 }
 
-export type Db = ReturnType<typeof getDb>;
+export type Db = DrizzleClient;
