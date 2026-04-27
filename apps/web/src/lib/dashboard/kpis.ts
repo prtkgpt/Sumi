@@ -5,6 +5,7 @@ import {
   transactions,
   financialAccounts,
   categories,
+  invoices,
 } from '@sumi/db';
 
 export type KpiSnapshot = {
@@ -13,6 +14,8 @@ export type KpiSnapshot = {
   revenueMtdCents: number;
   expensesMtdCents: number;
   profitMtdCents: number;
+  unpaidInvoiceCents: number;
+  unpaidInvoiceCount: number;
 };
 
 /**
@@ -85,10 +88,22 @@ export async function getDashboardKpis(
       )
     );
 
+  const [unpaidRow] = await db
+    .select({
+      cents: sql<string>`coalesce(sum(${invoices.totalCents} - ${invoices.paidAmountCents}), 0)`,
+      n: sql<string>`count(*)`,
+    })
+    .from(invoices)
+    .where(
+      and(eq(invoices.businessId, businessId), eq(invoices.status, 'sent'))
+    );
+
   const cashOnHandCents = parseInt(cashRow.cents, 10) || 0;
   const cashAccountCount = parseInt(cashRow.n, 10) || 0;
   const revenueMtdCents = parseInt(revenueRow.cents, 10) || 0;
   const expensesMtdCents = parseInt(expenseRow.cents, 10) || 0;
+  const unpaidInvoiceCents = parseInt(unpaidRow.cents, 10) || 0;
+  const unpaidInvoiceCount = parseInt(unpaidRow.n, 10) || 0;
 
   return {
     cashOnHandCents,
@@ -96,6 +111,8 @@ export async function getDashboardKpis(
     revenueMtdCents,
     expensesMtdCents,
     profitMtdCents: revenueMtdCents - expensesMtdCents,
+    unpaidInvoiceCents,
+    unpaidInvoiceCount,
   };
 }
 

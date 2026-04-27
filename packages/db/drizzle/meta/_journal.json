@@ -36,6 +36,20 @@
       "when": 1777265839302,
       "tag": "0004_furry_stature",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777266802328,
+      "tag": "0005_cute_shadow_king",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777267283834,
+      "tag": "0006_silly_cobalt_man",
+      "breakpoints": true
     }
   ]
 }

@@ -9,6 +9,9 @@ import {
   bigint,
   jsonb,
   boolean,
+  date,
+  numeric,
+  integer,
 } from 'drizzle-orm/pg-core';
 import { relations, sql } from 'drizzle-orm';
 
@@ -56,11 +59,21 @@ export const plaidItemStatus = pgEnum('plaid_item_status', [
   'error',
 ]);
 
-export const webhookProvider = pgEnum('webhook_provider', ['plaid']);
+export const webhookProvider = pgEnum('webhook_provider', [
+  'plaid',
+  'stripe',
+]);
 
 export const categorizationSource = pgEnum('categorization_source', [
   'user',
   'llm',
+]);
+
+export const invoiceStatus = pgEnum('invoice_status', [
+  'draft',
+  'sent',
+  'paid',
+  'void',
 ]);
 
 /**
@@ -351,6 +364,118 @@ export const categorizationRules = pgTable(
   })
 );
 
+/**
+ * Counterparties (customers / clients) a business invoices. Per-business;
+ * no global de-dup. Email is optional for v0.5 since we don't email invoices
+ * automatically yet — users copy/share the public pay link themselves.
+ */
+export const customers = pgTable(
+  'customers',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    businessId: uuid('business_id')
+      .notNull()
+      .references(() => businesses.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    email: text('email'),
+    phone: text('phone'),
+    notes: text('notes'),
+    isArchived: boolean('is_archived').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    bizIdx: index('customers_business_id_idx').on(t.businessId),
+    bizNameIdx: index('customers_business_name_idx').on(t.businessId, t.name),
+  })
+);
+
+/**
+ * Invoice header. `total_cents` is the sum of `invoice_line_items.amount_cents`
+ * (recomputed on every save). `public_token` is the unguessable slug used in
+ * the public pay URL `/pay/[token]` so we never expose internal IDs.
+ *
+ * `invoice_number` is per-business sequential, computed at insert time as
+ * MAX(invoice_number)+1 within the same `business_id`. It is not unique
+ * globally — only within a business.
+ */
+export const invoices = pgTable(
+  'invoices',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    businessId: uuid('business_id')
+      .notNull()
+      .references(() => businesses.id, { onDelete: 'cascade' }),
+    customerId: uuid('customer_id')
+      .notNull()
+      .references(() => customers.id, { onDelete: 'restrict' }),
+    invoiceNumber: integer('invoice_number').notNull(),
+    publicToken: text('public_token').notNull(),
+    status: invoiceStatus('status').notNull().default('draft'),
+    issuedAt: date('issued_at').notNull(),
+    dueAt: date('due_at').notNull(),
+    totalCents: bigint('total_cents', { mode: 'number' }).notNull().default(0),
+    paidAmountCents: bigint('paid_amount_cents', { mode: 'number' })
+      .notNull()
+      .default(0),
+    paidAt: timestamp('paid_at', { withTimezone: true }),
+    currency: text('currency').notNull().default('USD'),
+    notes: text('notes'),
+    stripeCheckoutSessionId: text('stripe_checkout_session_id'),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    publicTokenIdx: uniqueIndex('invoices_public_token_idx').on(t.publicToken),
+    bizNumberIdx: uniqueIndex('invoices_business_number_idx').on(
+      t.businessId,
+      t.invoiceNumber
+    ),
+    bizStatusIdx: index('invoices_business_status_idx').on(
+      t.businessId,
+      t.status
+    ),
+    customerIdx: index('invoices_customer_id_idx').on(t.customerId),
+  })
+);
+
+export const invoiceLineItems = pgTable(
+  'invoice_line_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    invoiceId: uuid('invoice_id')
+      .notNull()
+      .references(() => invoices.id, { onDelete: 'cascade' }),
+    description: text('description').notNull(),
+    quantity: numeric('quantity', { precision: 12, scale: 3 })
+      .notNull()
+      .default('1'),
+    unitPriceCents: bigint('unit_price_cents', { mode: 'number' }).notNull(),
+    amountCents: bigint('amount_cents', { mode: 'number' }).notNull(),
+    position: integer('position').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    invoiceIdx: index('invoice_line_items_invoice_id_idx').on(t.invoiceId),
+  })
+);
+
 export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(memberships),
   ownedBusinesses: many(businesses),
@@ -366,7 +491,43 @@ export const businessesRelations = relations(businesses, ({ one, many }) => ({
   categories: many(categories),
   transactions: many(transactions),
   plaidItems: many(plaidItems),
+  customers: many(customers),
+  invoices: many(invoices),
 }));
+
+export const customersRelations = relations(customers, ({ one, many }) => ({
+  business: one(businesses, {
+    fields: [customers.businessId],
+    references: [businesses.id],
+  }),
+  invoices: many(invoices),
+}));
+
+export const invoicesRelations = relations(invoices, ({ one, many }) => ({
+  business: one(businesses, {
+    fields: [invoices.businessId],
+    references: [businesses.id],
+  }),
+  customer: one(customers, {
+    fields: [invoices.customerId],
+    references: [customers.id],
+  }),
+  createdByUser: one(users, {
+    fields: [invoices.createdByUserId],
+    references: [users.id],
+  }),
+  lineItems: many(invoiceLineItems),
+}));
+
+export const invoiceLineItemsRelations = relations(
+  invoiceLineItems,
+  ({ one }) => ({
+    invoice: one(invoices, {
+      fields: [invoiceLineItems.invoiceId],
+      references: [invoices.id],
+    }),
+  })
+);
 
 export const membershipsRelations = relations(memberships, ({ one }) => ({
   business: one(businesses, {
@@ -447,3 +608,9 @@ export type WebhookEvent = typeof webhookEvents.$inferSelect;
 export type NewWebhookEvent = typeof webhookEvents.$inferInsert;
 export type CategorizationRule = typeof categorizationRules.$inferSelect;
 export type NewCategorizationRule = typeof categorizationRules.$inferInsert;
+export type Customer = typeof customers.$inferSelect;
+export type NewCustomer = typeof customers.$inferInsert;
+export type Invoice = typeof invoices.$inferSelect;
+export type NewInvoice = typeof invoices.$inferInsert;
+export type InvoiceLineItem = typeof invoiceLineItems.$inferSelect;
+export type NewInvoiceLineItem = typeof invoiceLineItems.$inferInsert;

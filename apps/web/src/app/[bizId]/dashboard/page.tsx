@@ -89,9 +89,15 @@ export default async function DashboardPage({
         />
         <KpiTile
           label="Unpaid invoices"
-          value="—"
-          caption="Coming with invoicing"
-          tone="muted"
+          value={formatUsd(kpis.unpaidInvoiceCents)}
+          caption={
+            kpis.unpaidInvoiceCount === 0
+              ? 'All clear'
+              : kpis.unpaidInvoiceCount === 1
+                ? '1 invoice outstanding'
+                : `${kpis.unpaidInvoiceCount} invoices outstanding`
+          }
+          tone={kpis.unpaidInvoiceCount > 0 ? 'default' : 'muted'}
         />
       </div>
     </div>

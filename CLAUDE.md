@@ -179,3 +179,27 @@ Out of scope (deferred to v0.5+):
 - Per-business timezones for "this month" boundaries (currently UTC).
 - Trend arrows / period-over-period comparisons on KPI tiles.
 - 24-month Plaid backfill.
+
+## v0.5 scope (in progress)
+
+After v0.4 ships, v0.5 adds **invoicing** so a business can bill customers and accept card payments. In scope:
+
+1. New tables: `customers`, `invoices`, `invoice_line_items`. `webhook_provider` enum widened to include `'stripe'`.
+2. **Customers** at `/[bizId]/customers`: list, add, edit, archive.
+3. **Invoices** at `/[bizId]/invoices`:
+   - List view with status chips (draft / sent / paid / void).
+   - Editor at `/new` and `/{id}/edit` with itemized line items, customer select, dates, notes; total recomputed live.
+   - Detail page at `/{id}` with Send / Mark paid / Void / Copy pay-link actions. Drafts are editable; sent/paid/void are immutable.
+4. **Public hosted pay page** at `/pay/[token]` (no auth) — branded summary + line items + Pay button. Server-rendered.
+5. **Stripe Checkout** at `POST /api/stripe/checkout` creates a Session for the invoice amount. Single-tenant: uses one `STRIPE_SECRET_KEY` (Stripe Connect / multi-tenant is v0.6+).
+6. **Stripe webhook** at `POST /api/stripe/webhook` verifies the signature, dedupes via `webhook_events`, and flips `invoices.status` to `paid` on `checkout.session.completed`.
+7. **Dashboard 5th KPI tile lights up**: sum + count of `invoices.status = 'sent'`.
+
+Out of scope (deferred to v0.6+):
+
+- Stripe Connect Standard for multi-tenant (each business connects their own Stripe).
+- Email delivery of invoices (SendGrid). For v0.5 the user copies the public pay link.
+- Auto-match Stripe payouts to bank deposits (Plaid will pick up the deposit on its own).
+- Recurring invoices, partial payments, ACH.
+- Receipts / OCR, tax packet, Schedule C export.
+- 24-month Plaid backfill, keyboard inbox shortcuts.
