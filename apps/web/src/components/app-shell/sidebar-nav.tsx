@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
   Receipt,
+  ScanLine,
   FileText,
   Users,
   BarChart3,
@@ -15,6 +16,7 @@ import { cn } from '@/lib/utils';
 const ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'transactions', label: 'Transactions', icon: Receipt },
+  { key: 'receipts', label: 'Receipts', icon: ScanLine },
   { key: 'invoices', label: 'Invoices', icon: FileText },
   { key: 'customers', label: 'Customers', icon: Users },
   { key: 'reports', label: 'Reports', icon: BarChart3 },

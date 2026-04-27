@@ -236,6 +236,25 @@ Out of scope (deferred to v0.8+):
 
 - PDF rendering / "Give to CPA" packet ZIP (CSV is enough to file taxes; PDF is polish).
 - TXF export for TurboTax import.
-- Email delivery (SendGrid), receipts/OCR.
 - Per-business timezones (still UTC).
 - 24-month Plaid backfill, keyboard inbox shortcuts.
+
+## v0.8 scope (in progress)
+
+After v0.7 ships, v0.8 adds **receipts** (drag-and-drop upload, OCR, auto-match) and lays the **email** plumbing for future delivery features. In scope:
+
+1. New table: `receipts(business_id, transaction_id nullable, file_url, kind enum 'image'|'pdf', status enum 'uploaded'|'extracted'|'matched'|'unmatched'|'failed', ocr_merchant, ocr_posted_at, ocr_amount_cents, ocr_currency, ocr_raw jsonb, ocr_error, uploaded_by_user_id)`. Indexed on `business_id` + `business_id, status` + `transaction_id`.
+2. **`/[bizId]/receipts`** page replaces placeholder. Drag-and-drop multi-file upload (JPG / PNG / WebP / GIF / PDF, ≤10 MB each), inline thumbnail, status chip, manual match dropdown over the last 200 transactions, delete.
+3. **Storage**: Vercel Blob (`@vercel/blob`). Files stored under `receipts/{bizId}/{timestamp}-{name}`, public URLs (so `<img>` works without signed URL plumbing). Optional `BLOB_READ_WRITE_TOKEN` env; receipts UI shows a banner when missing.
+4. **OCR**: Claude Haiku 4.5 vision (reuses our existing `ANTHROPIC_API_KEY`). System prompt says "extract merchant / date / total / currency"; structured output via `output_config.format` + json_schema. Works for both image and PDF receipts.
+5. **Auto-match**: `findMatchingTransaction` looks within ±7 days and ±$0.50 of the OCR'd total, scoring by combined date+amount delta. Single match → status `matched`. Zero matches → `unmatched`. Manual override is the dropdown.
+6. **Email scaffolding**: `lib/email/client.ts` with a `sendEmail()` wrapper around Resend. Optional `RESEND_API_KEY` env. **Currently a placeholder** — no production code calls it yet. Future PRs (invoice email send) will plug in.
+7. Sidebar adds **Receipts** between Transactions and Invoices.
+
+Out of scope (deferred to v0.9+):
+
+- Email forward inbound parse (`receipts+@receipts.sumi.app`) — needs Resend Inbound + DNS.
+- Mobile capture (lives in the Expo app).
+- Receipt thumbnails inline on the Transactions table.
+- PDF "Give to CPA" packet ZIP.
+- Per-business timezones (still UTC).

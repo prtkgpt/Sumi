@@ -86,6 +86,16 @@ export const entityType = pgEnum('entity_type', [
   'other',
 ]);
 
+export const receiptStatus = pgEnum('receipt_status', [
+  'uploaded',
+  'extracted',
+  'matched',
+  'unmatched',
+  'failed',
+]);
+
+export const receiptKind = pgEnum('receipt_kind', ['image', 'pdf']);
+
 /**
  * App-side mirror of the authenticated user.
  * `stack_user_id` is the Stack Auth user id (kept as text since Stack issues opaque ids).
@@ -505,6 +515,52 @@ export const invoiceLineItems = pgTable(
   })
 );
 
+/**
+ * Uploaded receipts. Stored as a blob (Vercel Blob URL); OCR is done
+ * post-upload via Claude Haiku vision. When a high-confidence match
+ * exists, `transaction_id` is populated and status flips to `matched`.
+ */
+export const receipts = pgTable(
+  'receipts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    businessId: uuid('business_id')
+      .notNull()
+      .references(() => businesses.id, { onDelete: 'cascade' }),
+    transactionId: uuid('transaction_id').references(() => transactions.id, {
+      onDelete: 'set null',
+    }),
+    fileUrl: text('file_url').notNull(),
+    fileName: text('file_name'),
+    kind: receiptKind('kind').notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }),
+    status: receiptStatus('status').notNull().default('uploaded'),
+    ocrMerchant: text('ocr_merchant'),
+    ocrPostedAt: timestamp('ocr_posted_at', { withTimezone: true }),
+    ocrAmountCents: bigint('ocr_amount_cents', { mode: 'number' }),
+    ocrCurrency: text('ocr_currency'),
+    ocrRaw: jsonb('ocr_raw'),
+    ocrError: text('ocr_error'),
+    uploadedByUserId: uuid('uploaded_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    bizIdx: index('receipts_business_id_idx').on(t.businessId),
+    txnIdx: index('receipts_transaction_id_idx').on(t.transactionId),
+    bizStatusIdx: index('receipts_business_status_idx').on(
+      t.businessId,
+      t.status
+    ),
+  })
+);
+
 export const usersRelations = relations(users, ({ many }) => ({
   memberships: many(memberships),
   ownedBusinesses: many(businesses),
@@ -522,6 +578,22 @@ export const businessesRelations = relations(businesses, ({ one, many }) => ({
   plaidItems: many(plaidItems),
   customers: many(customers),
   invoices: many(invoices),
+  receipts: many(receipts),
+}));
+
+export const receiptsRelations = relations(receipts, ({ one }) => ({
+  business: one(businesses, {
+    fields: [receipts.businessId],
+    references: [businesses.id],
+  }),
+  transaction: one(transactions, {
+    fields: [receipts.transactionId],
+    references: [transactions.id],
+  }),
+  uploadedByUser: one(users, {
+    fields: [receipts.uploadedByUserId],
+    references: [users.id],
+  }),
 }));
 
 export const customersRelations = relations(customers, ({ one, many }) => ({
@@ -643,3 +715,5 @@ export type Invoice = typeof invoices.$inferSelect;
 export type NewInvoice = typeof invoices.$inferInsert;
 export type InvoiceLineItem = typeof invoiceLineItems.$inferSelect;
 export type NewInvoiceLineItem = typeof invoiceLineItems.$inferInsert;
+export type Receipt = typeof receipts.$inferSelect;
+export type NewReceipt = typeof receipts.$inferInsert;
