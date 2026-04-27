@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull } from 'drizzle-orm';
 import {
   getDb,
   transactions,
@@ -21,6 +21,7 @@ import { requireBusiness } from '@/lib/auth/require-business';
 import { ensureCategorySeed } from '@/lib/categories';
 import { ConnectBankButton } from './connect-bank-button';
 import { CategoryPicker } from './category-picker';
+import { RecategorizeButton } from './recategorize-button';
 
 const PAGE_SIZE = 100;
 
@@ -57,7 +58,7 @@ export default async function InboxPage({
 
   const onlyUncategorized = filter === 'uncategorized';
 
-  const [accountCount, allCategories, rows] = await Promise.all([
+  const [accountCount, allCategories, rows, uncategorized] = await Promise.all([
     db
       .select({ id: financialAccounts.id })
       .from(financialAccounts)
@@ -102,11 +103,21 @@ export default async function InboxPage({
       )
       .orderBy(desc(transactions.postedAt))
       .limit(PAGE_SIZE),
+    db
+      .select({ n: count() })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.businessId, business.id),
+          isNull(transactions.categoryId)
+        )
+      ),
   ]);
 
   const hasAccounts = accountCount.length > 0;
   const hasTransactions = rows.length > 0;
   const showAccountWarning = need === 'account' && !hasAccounts;
+  const uncategorizedCount = uncategorized[0]?.n ?? 0;
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -138,7 +149,7 @@ export default async function InboxPage({
         </Card>
       )}
 
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button asChild variant={onlyUncategorized ? 'ghost' : 'secondary'} size="sm">
           <Link href={`/${business.id}/inbox`}>All</Link>
         </Button>
@@ -149,8 +160,19 @@ export default async function InboxPage({
         >
           <Link href={`/${business.id}/inbox?filter=uncategorized`}>
             Needs review
+            {uncategorizedCount > 0 && (
+              <span className="ml-1 text-muted-foreground">
+                ({uncategorizedCount})
+              </span>
+            )}
           </Link>
         </Button>
+        <div className="ml-auto">
+          <RecategorizeButton
+            bizId={business.id}
+            uncategorizedCount={uncategorizedCount}
+          />
+        </div>
       </div>
 
       {!hasTransactions ? (

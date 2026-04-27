@@ -9,9 +9,11 @@ import {
   financialAccounts,
   categories,
 } from '@sumi/db';
+import { revalidatePath } from 'next/cache';
 import { requireBusiness } from '@/lib/auth/require-business';
 import { normalizeMerchant } from '@/lib/categorization/normalize';
 import { upsertRule } from '@/lib/categorization/rules';
+import { autoCategorizeBusiness } from '@/lib/categorization/categorize';
 
 const Input = z.object({
   bizId: z.string().uuid(),
@@ -186,5 +188,48 @@ export async function setTransactionCategory(formData: FormData) {
         console.error('upsertRule (user override) failed', err);
       }
     }
+  }
+}
+
+const RecategorizeInput = z.object({
+  bizId: z.string().uuid(),
+});
+
+export type RecategorizeState = {
+  ruleHits?: number;
+  llmHits?: number;
+  llmMisses?: number;
+  scanned?: number;
+  error?: string;
+};
+
+/**
+ * Manual trigger that runs the categorization orchestrator across the
+ * business's uncategorized transactions. Bounded per call by the
+ * orchestrator (MAX_TRANSACTIONS_PER_RUN); the button can be clicked
+ * again to keep chipping away at large backlogs.
+ */
+export async function recategorizeUncategorized(
+  _prev: RecategorizeState,
+  formData: FormData
+): Promise<RecategorizeState> {
+  let parsed: z.infer<typeof RecategorizeInput>;
+  try {
+    parsed = RecategorizeInput.parse({ bizId: formData.get('bizId') });
+  } catch {
+    return { error: 'Invalid request' };
+  }
+
+  const { business } = await requireBusiness(parsed.bizId);
+
+  try {
+    const result = await autoCategorizeBusiness(business.id);
+    revalidatePath(`/${business.id}/inbox`);
+    return result;
+  } catch (err) {
+    console.error('recategorizeUncategorized failed', err);
+    return {
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
   }
 }
