@@ -14,8 +14,10 @@ export const env = createEnv({
       .string()
       .regex(/^[0-9a-fA-F]{64}$/, 'ENCRYPTION_KEY must be 32 bytes hex (64 chars)'),
     ANTHROPIC_API_KEY: z.string().min(1),
-    STRIPE_SECRET_KEY: z.string().min(1),
-    STRIPE_WEBHOOK_SECRET: z.string().min(1),
+    // Optional: invoicing falls back to "Mark paid" only when Stripe is
+    // unconfigured. Both must be set together for hosted card payments.
+    STRIPE_SECRET_KEY: z.string().min(1).optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
   },
   client: {
     NEXT_PUBLIC_STACK_PROJECT_ID: z.string().min(1),

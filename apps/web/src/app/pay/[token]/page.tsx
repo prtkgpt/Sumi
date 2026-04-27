@@ -10,6 +10,7 @@ import {
 } from '@sumi/db';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { isStripeConfigured } from '@/lib/stripe/client';
 import {
   Table,
   TableBody,
@@ -189,8 +190,19 @@ export default async function PublicPayPage({
               <p className="text-sm">This invoice has been voided.</p>
             </CardContent>
           </Card>
-        ) : (
+        ) : isStripeConfigured() ? (
           <PayButton token={inv.publicToken} amountCents={inv.totalCents} />
+        ) : (
+          <Card>
+            <CardContent className="space-y-1 py-4 text-sm">
+              <p className="font-medium">Pay this invoice</p>
+              <p className="text-muted-foreground">
+                Card payments aren&apos;t enabled on this account. Pay{' '}
+                {inv.businessName} another way (ACH, check, Zelle) and they
+                will mark this invoice as paid once it clears.
+              </p>
+            </CardContent>
+          </Card>
         )}
       </div>
 

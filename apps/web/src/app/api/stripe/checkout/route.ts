@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { getDb, invoices, customers } from '@sumi/db';
-import { getStripe } from '@/lib/stripe/client';
+import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/env';
 
 const Body = z.object({
@@ -10,6 +10,15 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
+  if (!isStripeConfigured()) {
+    return NextResponse.json(
+      {
+        error:
+          'Card payments are not enabled on this deployment. Ask the business to mark the invoice paid manually after you send payment another way.',
+      },
+      { status: 503 }
+    );
+  }
   let parsed: z.infer<typeof Body>;
   try {
     parsed = Body.parse(await req.json());

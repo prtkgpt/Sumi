@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
 import { getDb, invoices, webhookEvents } from '@sumi/db';
-import { getStripe } from '@/lib/stripe/client';
+import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
 import { env } from '@/env';
 
 // Stripe sends signed webhooks. We verify the signature against
@@ -12,6 +12,12 @@ import { env } from '@/env';
 // Reference: https://docs.stripe.com/webhooks/signatures
 
 export async function POST(req: Request) {
+  if (!isStripeConfigured() || !env.STRIPE_WEBHOOK_SECRET) {
+    return NextResponse.json(
+      { error: 'stripe not configured on this deployment' },
+      { status: 503 }
+    );
+  }
   const sig = req.headers.get('stripe-signature');
   if (!sig) {
     return NextResponse.json({ error: 'missing signature' }, { status: 401 });
