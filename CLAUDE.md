@@ -219,6 +219,23 @@ Out of scope (deferred to v0.7+):
 
 - Stripe Connect OAuth (current model: paste your own keys).
 - 1099 contractor tracking, vendor invoicing, recurring invoices.
-- Email delivery (SendGrid), receipts/OCR, tax packet, Schedule C export.
+- Email delivery (SendGrid), receipts/OCR.
+- Per-business timezones (still UTC).
+- 24-month Plaid backfill, keyboard inbox shortcuts.
+
+## v0.7 scope (in progress)
+
+After v0.6 ships, v0.7 makes Sumi useful at tax time. In scope:
+
+1. **`/[bizId]/reports`** page replaces the placeholder. Period selector (this month / this quarter / YTD / last year / custom range), three summary tiles (income / expenses / net profit), full P&L by category, Schedule C summary mapped to IRS Form 1040 lines.
+2. **CSV exports** at `/api/reports/transactions` (date-ranged) and `/api/reports/schedule-c?year=` ("Give to CPA" feed). RFC 4180 quoting; CRLF line endings for Excel.
+3. **Uncategorized callout**: when activity in the period has no category, the report shows the dollar amount and links to the "Needs review" filter on `/transactions` so the user can clean up before sharing the report.
+4. **Schedule C taxonomy** in `apps/web/src/lib/reports/schedule-c.ts` codifies the IRS Part II line numbers (8-27a) plus the Part I income lines (1, 6). Categories created in v0.2 already carry their line via `categories.schedule_c_line`.
+
+Out of scope (deferred to v0.8+):
+
+- PDF rendering / "Give to CPA" packet ZIP (CSV is enough to file taxes; PDF is polish).
+- TXF export for TurboTax import.
+- Email delivery (SendGrid), receipts/OCR.
 - Per-business timezones (still UTC).
 - 24-month Plaid backfill, keyboard inbox shortcuts.
