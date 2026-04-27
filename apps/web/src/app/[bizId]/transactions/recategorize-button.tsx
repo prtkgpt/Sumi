@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import {
   recategorizeUncategorized,
   type RecategorizeState,
-} from '../transactions/actions';
+} from './actions';
 
 const initial: RecategorizeState = {};
 

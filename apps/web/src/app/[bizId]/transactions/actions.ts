@@ -108,7 +108,7 @@ export async function createManualTransaction(
     createdByUserId: user.id,
   });
 
-  redirect(`/${business.id}/inbox`);
+  redirect(`/${business.id}/transactions`);
 }
 
 const SetCategoryInput = z.object({
@@ -224,7 +224,7 @@ export async function recategorizeUncategorized(
 
   try {
     const result = await autoCategorizeBusiness(business.id);
-    revalidatePath(`/${business.id}/inbox`);
+    revalidatePath(`/${business.id}/transactions`);
     return result;
   } catch (err) {
     console.error('recategorizeUncategorized failed', err);

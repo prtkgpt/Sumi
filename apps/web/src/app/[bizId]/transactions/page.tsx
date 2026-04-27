@@ -123,9 +123,9 @@ export default async function InboxPage({
     <div className="mx-auto max-w-6xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Inbox</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Transactions</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Review and categorize your transactions.
+            Review, categorize, and add transactions for your business.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -151,14 +151,14 @@ export default async function InboxPage({
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button asChild variant={onlyUncategorized ? 'ghost' : 'secondary'} size="sm">
-          <Link href={`/${business.id}/inbox`}>All</Link>
+          <Link href={`/${business.id}/transactions`}>All</Link>
         </Button>
         <Button
           asChild
           variant={onlyUncategorized ? 'secondary' : 'ghost'}
           size="sm"
         >
-          <Link href={`/${business.id}/inbox?filter=uncategorized`}>
+          <Link href={`/${business.id}/transactions?filter=uncategorized`}>
             Needs review
             {uncategorizedCount > 0 && (
               <span className="ml-1 text-muted-foreground">

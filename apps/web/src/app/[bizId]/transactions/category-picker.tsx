@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { setTransactionCategory } from '../transactions/actions';
+import { setTransactionCategory } from './actions';
 
 type CategoryOption = {
   id: string;

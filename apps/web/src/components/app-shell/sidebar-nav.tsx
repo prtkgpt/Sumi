@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  Inbox,
+  Receipt,
   FileText,
   Users,
   BarChart3,
@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils';
 
 const ITEMS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { key: 'inbox', label: 'Inbox', icon: Inbox },
+  { key: 'transactions', label: 'Transactions', icon: Receipt },
   { key: 'invoices', label: 'Invoices', icon: FileText },
   { key: 'customers', label: 'Customers', icon: Users },
   { key: 'reports', label: 'Reports', icon: BarChart3 },

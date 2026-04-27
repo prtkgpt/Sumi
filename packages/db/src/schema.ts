@@ -189,6 +189,9 @@ export const financialAccounts = pgTable(
     mask: text('mask'),
     institutionName: text('institution_name'),
     isArchived: boolean('is_archived').notNull().default(false),
+    currentBalanceCents: bigint('current_balance_cents', { mode: 'number' }),
+    availableBalanceCents: bigint('available_balance_cents', { mode: 'number' }),
+    lastBalanceAt: timestamp('last_balance_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

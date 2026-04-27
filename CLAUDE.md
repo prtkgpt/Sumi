@@ -128,7 +128,7 @@ After v0.1 ships, v0.2 adds the **transactions backbone** so the inbox stops bei
 1. New tables: `financial_accounts`, `categories`, `transactions`, `plaid_items`, `webhook_events` (Drizzle source of truth in `packages/db/src/schema.ts`).
 2. **Plaid Link** end-to-end: link-token endpoint, public-token exchange, initial ~30-day `/transactions/sync` pull, signed webhook handler that advances the cursor on `SYNC_UPDATES_AVAILABLE`. Plaid access tokens are encrypted at rest with AES-256-GCM (key in `ENCRYPTION_KEY`).
 3. **Manual transaction entry** at `/[bizId]/transactions/new`.
-4. **Inbox replacement** at `/[bizId]/inbox`: real transaction list (Plaid + manual mixed), inline category select, "Needs review" filter, Connect-bank + Add-transaction CTAs.
+4. **Transactions list** at `/[bizId]/transactions` (renamed from `/inbox` in v0.4): real transaction list (Plaid + manual mixed), inline category select, "Needs review" filter, Connect-bank + Add-transaction CTAs.
 5. **Schedule C category seed** on first transaction insert per business (20-line taxonomy + transfer/owner_draw/personal).
 
 Out of scope (deferred to v0.3+):
@@ -155,6 +155,27 @@ After v0.2 ships, v0.3 adds the **auto-categorization pipeline** so most Plaid r
 Out of scope (deferred to v0.4+):
 
 - Keyboard-driven inbox shortcuts, bulk edit, transaction splits.
-- Dashboard KPI tiles.
 - 24-month Plaid backfill.
 - Invoicing, customers, receipts/OCR, tax packet.
+
+## v0.4 scope (in progress)
+
+After v0.3 ships, v0.4 makes the dashboard non-empty. In scope:
+
+1. **Inbox → Transactions rename.** `/[bizId]/inbox` is now `/[bizId]/transactions`; sidebar label and icon updated. The `/transactions/new` manual-entry path is unchanged.
+2. **Account balance snapshots.** New columns on `financial_accounts`: `current_balance_cents`, `available_balance_cents`, `last_balance_at`. Captured on Plaid `exchange` and refreshed in `syncItem` via `accountsGet`.
+3. **Dashboard KPIs at `/[bizId]/dashboard`**: 5 tiles in a responsive grid.
+   - Cash on hand: sum of `current_balance_cents` across `bank_checking | bank_savings | manual_cash`.
+   - Revenue MTD: sum of categorized-`income` transactions this month.
+   - Expenses MTD: sum of categorized-`expense` transactions this month (positive number).
+   - Profit MTD: revenue − expenses, color-coded.
+   - Unpaid invoices: placeholder `—` until v0.5 invoicing lands.
+
+Out of scope (deferred to v0.5+):
+
+- Invoicing (customers, invoice editor, Stripe Checkout, hosted pay pages).
+- Receipts / OCR.
+- Tax packet export.
+- Per-business timezones for "this month" boundaries (currently UTC).
+- Trend arrows / period-over-period comparisons on KPI tiles.
+- 24-month Plaid backfill.
