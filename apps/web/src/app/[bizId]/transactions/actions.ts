@@ -1,0 +1,153 @@
+'use server';
+
+import { redirect } from 'next/navigation';
+import { z } from 'zod';
+import { and, eq } from 'drizzle-orm';
+import {
+  getDb,
+  transactions,
+  financialAccounts,
+  categories,
+} from '@sumi/db';
+import { requireBusiness } from '@/lib/auth/require-business';
+
+const Input = z.object({
+  bizId: z.string().uuid(),
+  postedAt: z.string().min(1, 'Date is required'),
+  // Dollars input from the form, parsed and signed below.
+  amountDollars: z
+    .string()
+    .min(1, 'Amount is required')
+    .regex(/^-?\d+(\.\d{1,2})?$/, 'Amount must be a valid dollar value'),
+  direction: z.enum(['inflow', 'outflow']),
+  accountId: z.string().uuid('Pick an account'),
+  categoryId: z.string().uuid().optional().or(z.literal('')),
+  merchant: z.string().trim().max(200).optional(),
+  description: z.string().trim().min(1, 'Description is required').max(500),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+export type CreateManualTransactionState = {
+  error?: string;
+};
+
+export async function createManualTransaction(
+  _prev: CreateManualTransactionState,
+  formData: FormData
+): Promise<CreateManualTransactionState> {
+  const parsed = Input.safeParse({
+    bizId: formData.get('bizId'),
+    postedAt: formData.get('postedAt'),
+    amountDollars: formData.get('amountDollars'),
+    direction: formData.get('direction'),
+    accountId: formData.get('accountId'),
+    categoryId: formData.get('categoryId') || undefined,
+    merchant: formData.get('merchant') || undefined,
+    description: formData.get('description'),
+    notes: formData.get('notes') || undefined,
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Invalid input' };
+  }
+  const input = parsed.data;
+
+  const { user, business } = await requireBusiness(input.bizId);
+
+  const db = getDb();
+
+  // Defense in depth: verify the chosen account + category belong to this business.
+  const [account] = await db
+    .select({ id: financialAccounts.id })
+    .from(financialAccounts)
+    .where(
+      and(
+        eq(financialAccounts.id, input.accountId),
+        eq(financialAccounts.businessId, business.id)
+      )
+    )
+    .limit(1);
+  if (!account) return { error: 'Account not found' };
+
+  let categoryId: string | null = null;
+  if (input.categoryId) {
+    const [cat] = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(
+        and(
+          eq(categories.id, input.categoryId),
+          eq(categories.businessId, business.id)
+        )
+      )
+      .limit(1);
+    if (!cat) return { error: 'Category not found' };
+    categoryId = cat.id;
+  }
+
+  const dollars = Number(input.amountDollars.replace(/^-/, ''));
+  const cents = Math.round(dollars * 100);
+  const signed = input.direction === 'inflow' ? cents : -cents;
+
+  await db.insert(transactions).values({
+    businessId: business.id,
+    accountId: account.id,
+    categoryId,
+    postedAt: new Date(input.postedAt),
+    amountCents: signed,
+    currency: 'USD',
+    merchant: input.merchant ?? null,
+    description: input.description,
+    source: 'manual',
+    status: 'reviewed',
+    notes: input.notes ?? null,
+    createdByUserId: user.id,
+  });
+
+  redirect(`/${business.id}/inbox`);
+}
+
+const SetCategoryInput = z.object({
+  bizId: z.string().uuid(),
+  transactionId: z.string().uuid(),
+  // Empty string = clear the category.
+  categoryId: z.string().uuid().or(z.literal('')),
+});
+
+export async function setTransactionCategory(formData: FormData) {
+  const parsed = SetCategoryInput.parse({
+    bizId: formData.get('bizId'),
+    transactionId: formData.get('transactionId'),
+    categoryId: formData.get('categoryId') ?? '',
+  });
+  const { business } = await requireBusiness(parsed.bizId);
+  const db = getDb();
+
+  const nextCategoryId: string | null = parsed.categoryId || null;
+  if (nextCategoryId) {
+    const [cat] = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(
+        and(
+          eq(categories.id, nextCategoryId),
+          eq(categories.businessId, business.id)
+        )
+      )
+      .limit(1);
+    if (!cat) throw new Error('Category not found');
+  }
+
+  await db
+    .update(transactions)
+    .set({
+      categoryId: nextCategoryId,
+      status: 'reviewed',
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(transactions.id, parsed.transactionId),
+        eq(transactions.businessId, business.id)
+      )
+    );
+}

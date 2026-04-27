@@ -120,3 +120,21 @@ Then walk the eight items in the v0.1 definition of done by hand.
 8. Unauthenticated access to any `/[bizId]/*` route redirects to sign in.
 
 If a future task expands scope beyond these eight items, **stop and flag it**.
+
+## v0.2 scope (in progress)
+
+After v0.1 ships, v0.2 adds the **transactions backbone** so the inbox stops being a placeholder. In scope:
+
+1. New tables: `financial_accounts`, `categories`, `transactions`, `plaid_items`, `webhook_events` (Drizzle source of truth in `packages/db/src/schema.ts`).
+2. **Plaid Link** end-to-end: link-token endpoint, public-token exchange, initial ~30-day `/transactions/sync` pull, signed webhook handler that advances the cursor on `SYNC_UPDATES_AVAILABLE`. Plaid access tokens are encrypted at rest with AES-256-GCM (key in `ENCRYPTION_KEY`).
+3. **Manual transaction entry** at `/[bizId]/transactions/new`.
+4. **Inbox replacement** at `/[bizId]/inbox`: real transaction list (Plaid + manual mixed), inline category select, "Needs review" filter, Connect-bank + Add-transaction CTAs.
+5. **Schedule C category seed** on first transaction insert per business (20-line taxonomy + transfer/owner_draw/personal).
+
+Out of scope (deferred to v0.3+):
+
+- Auto-categorization (LLM pipeline).
+- Keyboard-driven inbox (j/k/c/s shortcuts), bulk edit, splits.
+- Dashboard KPI tiles (cash, revenue, expenses, profit, unpaid invoices).
+- 24-month historical Plaid backfill (v0.2 caps at ~30 days).
+- Invoicing, customers, receipts/OCR, tax packet, mobile.

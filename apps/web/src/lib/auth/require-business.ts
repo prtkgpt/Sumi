@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { redirect } from 'next/navigation';
 import { and, eq } from 'drizzle-orm';
 import {
@@ -21,26 +22,31 @@ export type RequiredBusiness = {
  * Use at the top of every Server Component under /[bizId]/*.
  * - No session → /handler/sign-in
  * - Session but no membership for this business → /onboarding
+ *
+ * Wrapped in React `cache()` (keyed by bizId) so layout + page + nested
+ * components all share a single membership lookup per request.
  */
-export async function requireBusiness(bizId: string): Promise<RequiredBusiness> {
-  const user = await syncCurrentUser();
-  if (!user) redirect('/handler/sign-in');
+export const requireBusiness = cache(
+  async (bizId: string): Promise<RequiredBusiness> => {
+    const user = await syncCurrentUser();
+    if (!user) redirect('/handler/sign-in');
 
-  const db = getDb();
-  const rows = await db
-    .select({ membership: memberships, business: businesses })
-    .from(memberships)
-    .innerJoin(businesses, eq(businesses.id, memberships.businessId))
-    .where(
-      and(
-        eq(memberships.userId, user.id),
-        eq(memberships.businessId, bizId),
-        eq(memberships.status, 'active')
+    const db = getDb();
+    const rows = await db
+      .select({ membership: memberships, business: businesses })
+      .from(memberships)
+      .innerJoin(businesses, eq(businesses.id, memberships.businessId))
+      .where(
+        and(
+          eq(memberships.userId, user.id),
+          eq(memberships.businessId, bizId),
+          eq(memberships.status, 'active')
+        )
       )
-    )
-    .limit(1);
+      .limit(1);
 
-  if (rows.length === 0) redirect('/onboarding');
+    if (rows.length === 0) redirect('/onboarding');
 
-  return { user, business: rows[0].business, membership: rows[0].membership };
-}
+    return { user, business: rows[0].business, membership: rows[0].membership };
+  }
+);

@@ -1,4 +1,5 @@
 import 'server-only';
+import { cache } from 'react';
 import { eq } from 'drizzle-orm';
 import { getDb, users, type User } from '@sumi/db';
 import { stackServerApp } from '@/stack';
@@ -7,8 +8,12 @@ import { stackServerApp } from '@/stack';
  * Returns the current Stack user mapped to the local `users` row.
  * Inserts a row on first call so that other tables can FK to `users.id`.
  * Returns null when nobody is signed in.
+ *
+ * Wrapped in React `cache()` so multiple calls within the same request
+ * (e.g. layout + page + server action) collapse into a single Stack API
+ * round-trip and a single DB lookup.
  */
-export async function syncCurrentUser(): Promise<User | null> {
+export const syncCurrentUser = cache(async (): Promise<User | null> => {
   const stackUser = await stackServerApp.getUser();
   if (!stackUser) return null;
 
@@ -46,4 +51,4 @@ export async function syncCurrentUser(): Promise<User | null> {
     .values({ stackUserId: stackUser.id, email, displayName })
     .returning();
   return inserted;
-}
+});
