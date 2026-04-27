@@ -76,6 +76,16 @@ export const invoiceStatus = pgEnum('invoice_status', [
   'void',
 ]);
 
+export const entityType = pgEnum('entity_type', [
+  'sole_prop',
+  'llc',
+  's_corp',
+  'c_corp',
+  'partnership',
+  'nonprofit',
+  'other',
+]);
+
 /**
  * App-side mirror of the authenticated user.
  * `stack_user_id` is the Stack Auth user id (kept as text since Stack issues opaque ids).
@@ -105,6 +115,25 @@ export const businesses = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     legalName: text('legal_name').notNull(),
+    displayName: text('display_name'),
+    email: text('email'),
+    phone: text('phone'),
+    addressLine1: text('address_line1'),
+    addressLine2: text('address_line2'),
+    city: text('city'),
+    state: text('state'),
+    postalCode: text('postal_code'),
+    country: text('country').notNull().default('US'),
+    einEncrypted: text('ein_encrypted'),
+    entityType: entityType('entity_type'),
+    // Per-business Stripe creds. When set, overrides env STRIPE_*. Stored
+    // encrypted at rest with the same AES-256-GCM helper used for Plaid
+    // access tokens. Webhook signing secret is per-endpoint, so each
+    // business creates their own webhook in their Stripe dashboard
+    // pointing at /api/stripe/webhook/[bizId].
+    stripeSecretKeyEncrypted: text('stripe_secret_key_encrypted'),
+    stripeWebhookSecretEncrypted: text('stripe_webhook_secret_encrypted'),
+    stripeAccountId: text('stripe_account_id'),
     ownerUserId: uuid('owner_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),

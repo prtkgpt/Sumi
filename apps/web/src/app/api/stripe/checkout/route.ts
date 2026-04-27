@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
 import { getDb, invoices, customers } from '@sumi/db';
-import { getStripe, isStripeConfigured } from '@/lib/stripe/client';
+import { getStripeForBusiness } from '@/lib/stripe/client';
 import { env } from '@/env';
 
 const Body = z.object({
@@ -10,15 +10,6 @@ const Body = z.object({
 });
 
 export async function POST(req: Request) {
-  if (!isStripeConfigured()) {
-    return NextResponse.json(
-      {
-        error:
-          'Card payments are not enabled on this deployment. Ask the business to mark the invoice paid manually after you send payment another way.',
-      },
-      { status: 503 }
-    );
-  }
   let parsed: z.infer<typeof Body>;
   try {
     parsed = Body.parse(await req.json());
@@ -30,6 +21,7 @@ export async function POST(req: Request) {
   const [inv] = await db
     .select({
       id: invoices.id,
+      businessId: invoices.businessId,
       invoiceNumber: invoices.invoiceNumber,
       status: invoices.status,
       totalCents: invoices.totalCents,
@@ -55,8 +47,19 @@ export async function POST(req: Request) {
     );
   }
 
+  const stripeContext = await getStripeForBusiness(inv.businessId);
+  if (!stripeContext) {
+    return NextResponse.json(
+      {
+        error:
+          'Card payments are not enabled for this business. Pay another way and ask the business to mark the invoice paid.',
+      },
+      { status: 503 }
+    );
+  }
+
   const appUrl = env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, '');
-  const stripe = getStripe();
+  const stripe = stripeContext.stripe;
 
   const session = await stripe.checkout.sessions.create({
     mode: 'payment',
@@ -68,11 +71,13 @@ export async function POST(req: Request) {
       metadata: {
         sumi_invoice_id: inv.id,
         sumi_invoice_token: inv.publicToken,
+        sumi_business_id: inv.businessId,
       },
     },
     metadata: {
       sumi_invoice_id: inv.id,
       sumi_invoice_token: inv.publicToken,
+      sumi_business_id: inv.businessId,
     },
     line_items: [
       {

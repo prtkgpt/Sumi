@@ -197,9 +197,28 @@ After v0.4 ships, v0.5 adds **invoicing** so a business can bill customers and a
 
 Out of scope (deferred to v0.6+):
 
-- Stripe Connect Standard for multi-tenant (each business connects their own Stripe).
 - Email delivery of invoices (SendGrid). For v0.5 the user copies the public pay link.
 - Auto-match Stripe payouts to bank deposits (Plaid will pick up the deposit on its own).
 - Recurring invoices, partial payments, ACH.
 - Receipts / OCR, tax packet, Schedule C export.
+- 24-month Plaid backfill, keyboard inbox shortcuts.
+
+## v0.6 scope (in progress)
+
+After v0.5 ships, v0.6 makes Sumi properly **multi-tenant**: each business has its own profile and its own Stripe credentials. Single deployment, many businesses, isolated payments.
+
+1. **Extended `businesses` schema** with profile fields (display name, contact email/phone, address, EIN encrypted, entity type) and per-business Stripe creds (`stripe_secret_key_encrypted`, `stripe_webhook_secret_encrypted`, `stripe_account_id`). EIN and Stripe keys are stored AES-256-GCM encrypted.
+2. **`/[bizId]/settings`** page replaces the placeholder. Two sections:
+   - **Profile** — legal name, DBA, contact, address, EIN (masked after save), entity type. Saved via `updateBusinessProfile` server action.
+   - **Stripe** — paste `sk_test_…` / `sk_live_…` + webhook signing secret. The action validates the secret key by calling `accounts.retrieve()` before storing; webhook URL is shown for the user to register in their Stripe dashboard.
+3. **`getStripeForBusiness(bizId)`** in `apps/web/src/lib/stripe/client.ts` reads + decrypts the business's keys; falls back to `STRIPE_*` env if unconfigured (single-tenant deployments still work).
+4. **Per-business webhook URL** at `/api/stripe/webhook/[bizId]`. Signature verified against the per-business stored secret. Old `/api/stripe/webhook` (no bizId) becomes the env-based fallback.
+5. **Pay page gating** (`/pay/[token]`) checks per-business Stripe configuration; degrades to "pay another way" message when off.
+
+Out of scope (deferred to v0.7+):
+
+- Stripe Connect OAuth (current model: paste your own keys).
+- 1099 contractor tracking, vendor invoicing, recurring invoices.
+- Email delivery (SendGrid), receipts/OCR, tax packet, Schedule C export.
+- Per-business timezones (still UTC).
 - 24-month Plaid backfill, keyboard inbox shortcuts.

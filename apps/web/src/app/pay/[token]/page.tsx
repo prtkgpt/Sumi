@@ -10,7 +10,7 @@ import {
 } from '@sumi/db';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { isStripeConfigured } from '@/lib/stripe/client';
+import { isStripeConfiguredForBusiness } from '@/lib/stripe/client';
 import {
   Table,
   TableBody,
@@ -49,6 +49,7 @@ export default async function PublicPayPage({
   const [inv] = await db
     .select({
       id: invoices.id,
+      businessId: invoices.businessId,
       invoiceNumber: invoices.invoiceNumber,
       status: invoices.status,
       issuedAt: invoices.issuedAt,
@@ -59,7 +60,8 @@ export default async function PublicPayPage({
       notes: invoices.notes,
       publicToken: invoices.publicToken,
       customerName: customers.name,
-      businessName: businesses.legalName,
+      businessName: businesses.displayName,
+      businessLegalName: businesses.legalName,
     })
     .from(invoices)
     .innerJoin(customers, eq(customers.id, invoices.customerId))
@@ -67,6 +69,8 @@ export default async function PublicPayPage({
     .where(eq(invoices.publicToken, token))
     .limit(1);
   if (!inv || inv.status === 'draft') notFound();
+  const stripeOn = await isStripeConfiguredForBusiness(inv.businessId);
+  const businessLabel = inv.businessName || inv.businessLegalName;
 
   const lines = await db
     .select({
@@ -90,7 +94,7 @@ export default async function PublicPayPage({
           Invoice from
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-          {inv.businessName}
+          {businessLabel}
         </h1>
       </header>
 
@@ -190,7 +194,7 @@ export default async function PublicPayPage({
               <p className="text-sm">This invoice has been voided.</p>
             </CardContent>
           </Card>
-        ) : isStripeConfigured() ? (
+        ) : stripeOn ? (
           <PayButton token={inv.publicToken} amountCents={inv.totalCents} />
         ) : (
           <Card>
@@ -198,7 +202,7 @@ export default async function PublicPayPage({
               <p className="font-medium">Pay this invoice</p>
               <p className="text-muted-foreground">
                 Card payments aren&apos;t enabled on this account. Pay{' '}
-                {inv.businessName} another way (ACH, check, Zelle) and they
+                {businessLabel} another way (ACH, check, Zelle) and they
                 will mark this invoice as paid once it clears.
               </p>
             </CardContent>
