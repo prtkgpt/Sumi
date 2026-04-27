@@ -13,6 +13,7 @@ export const env = createEnv({
     ENCRYPTION_KEY: z
       .string()
       .regex(/^[0-9a-fA-F]{64}$/, 'ENCRYPTION_KEY must be 32 bytes hex (64 chars)'),
+    ANTHROPIC_API_KEY: z.string().min(1),
   },
   client: {
     NEXT_PUBLIC_STACK_PROJECT_ID: z.string().min(1),
@@ -26,6 +27,7 @@ export const env = createEnv({
     PLAID_SECRET: process.env.PLAID_SECRET,
     PLAID_ENV: process.env.PLAID_ENV,
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     NEXT_PUBLIC_STACK_PROJECT_ID: process.env.NEXT_PUBLIC_STACK_PROJECT_ID,
     NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY:
       process.env.NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY,

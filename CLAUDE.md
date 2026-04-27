@@ -138,3 +138,23 @@ Out of scope (deferred to v0.3+):
 - Dashboard KPI tiles (cash, revenue, expenses, profit, unpaid invoices).
 - 24-month historical Plaid backfill (v0.2 caps at ~30 days).
 - Invoicing, customers, receipts/OCR, tax packet, mobile.
+
+## v0.3 scope (in progress)
+
+After v0.2 ships, v0.3 adds the **auto-categorization pipeline** so most Plaid rows arrive with a category guess and users only review the unknowns. In scope:
+
+1. New table: `categorization_rules` (per-business merchant → category mapping with `source` enum `user | llm`). New column on `transactions`: `category_source enum('user','llm')` (nullable; null when uncategorized).
+2. **3-stage pipeline** in `apps/web/src/lib/categorization/`:
+   - Stage 1 — exact rule lookup keyed by `normalize(merchant)`.
+   - Stage 2 — Claude Haiku (`claude-haiku-4-5`) batched call (~20 transactions per request) with structured JSON output (`output_config.format` + json_schema), prompt caching on the system + category list. Verdicts below 0.7 confidence stay uncategorized.
+   - Stage 3 — every user override in the inbox upserts a `source='user'` rule that beats LLM rules for the same merchant on future imports.
+3. **Trigger points**: end of `syncItem` after Plaid upsert; `setTransactionCategory` server action when the user picks a category.
+4. **UI**: small "AI" badge next to LLM-categorized rows in the inbox so users know what to spot-check.
+5. New env: `ANTHROPIC_API_KEY`.
+
+Out of scope (deferred to v0.4+):
+
+- Keyboard-driven inbox shortcuts, bulk edit, transaction splits.
+- Dashboard KPI tiles.
+- 24-month Plaid backfill.
+- Invoicing, customers, receipts/OCR, tax packet.

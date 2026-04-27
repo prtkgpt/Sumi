@@ -10,6 +10,8 @@ import {
   categories,
 } from '@sumi/db';
 import { requireBusiness } from '@/lib/auth/require-business';
+import { normalizeMerchant } from '@/lib/categorization/normalize';
+import { upsertRule } from '@/lib/categorization/rules';
 
 const Input = z.object({
   bizId: z.string().uuid(),
@@ -92,6 +94,7 @@ export async function createManualTransaction(
     businessId: business.id,
     accountId: account.id,
     categoryId,
+    categorySource: categoryId ? 'user' : null,
     postedAt: new Date(input.postedAt),
     amountCents: signed,
     currency: 'USD',
@@ -137,10 +140,26 @@ export async function setTransactionCategory(formData: FormData) {
     if (!cat) throw new Error('Category not found');
   }
 
+  // Read merchant first so we can write a learned rule below.
+  const [txnRow] = await db
+    .select({
+      merchant: transactions.merchant,
+      description: transactions.description,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.id, parsed.transactionId),
+        eq(transactions.businessId, business.id)
+      )
+    )
+    .limit(1);
+
   await db
     .update(transactions)
     .set({
       categoryId: nextCategoryId,
+      categorySource: nextCategoryId ? 'user' : null,
       status: 'reviewed',
       updatedAt: new Date(),
     })
@@ -150,4 +169,22 @@ export async function setTransactionCategory(formData: FormData) {
         eq(transactions.businessId, business.id)
       )
     );
+
+  // Stage 3: when the user assigns a category, learn a rule. source='user'
+  // wins over source='llm' for the same merchant on future Plaid imports.
+  if (txnRow && nextCategoryId) {
+    const merchantKey = normalizeMerchant(txnRow.merchant ?? txnRow.description);
+    if (merchantKey) {
+      try {
+        await upsertRule({
+          businessId: business.id,
+          merchantNormalized: merchantKey,
+          categoryId: nextCategoryId,
+          source: 'user',
+        });
+      } catch (err) {
+        console.error('upsertRule (user override) failed', err);
+      }
+    }
+  }
 }

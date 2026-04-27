@@ -6,7 +6,7 @@ import {
   financialAccounts,
   categories,
 } from '@sumi/db';
-import { Plus } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -81,6 +81,7 @@ export default async function InboxPage({
         description: transactions.description,
         source: transactions.source,
         categoryId: transactions.categoryId,
+        categorySource: transactions.categorySource,
         categoryName: categories.displayName,
         accountName: financialAccounts.name,
         accountMask: financialAccounts.mask,
@@ -205,12 +206,23 @@ export default async function InboxPage({
                     {r.accountMask ? ` ··${r.accountMask}` : ''}
                   </TableCell>
                   <TableCell>
-                    <CategoryPicker
-                      bizId={business.id}
-                      transactionId={r.id}
-                      currentCategoryId={r.categoryId}
-                      categories={allCategories}
-                    />
+                    <div className="flex items-center gap-2">
+                      <CategoryPicker
+                        bizId={business.id}
+                        transactionId={r.id}
+                        currentCategoryId={r.categoryId}
+                        categories={allCategories}
+                      />
+                      {r.categorySource === 'llm' && (
+                        <span
+                          title="Auto-categorized by Claude"
+                          className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-950/50 dark:text-violet-300"
+                        >
+                          <Sparkles className="size-3" />
+                          AI
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell
                     className={`text-right font-medium tabular-nums ${

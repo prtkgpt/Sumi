@@ -15,6 +15,20 @@
       "when": 1777260982342,
       "tag": "0001_tiny_mephistopheles",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777263892835,
+      "tag": "0002_great_sumo",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777264215099,
+      "tag": "0003_flowery_mantis",
+      "breakpoints": true
     }
   ]
 }

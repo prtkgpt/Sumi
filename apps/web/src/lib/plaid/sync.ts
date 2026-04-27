@@ -13,6 +13,7 @@ import {
 } from 'plaid';
 import { getPlaidClient } from './client';
 import { decryptString } from '@/lib/crypto';
+import { autoCategorizeBusiness } from '@/lib/categorization/categorize';
 
 type SyncResult = {
   added: number;
@@ -63,6 +64,25 @@ export async function syncItem(itemRowId: string): Promise<SyncResult> {
   }
 
   await applyChanges(item, added, modified, removed, cursor ?? null);
+
+  // Auto-categorize newly imported rows. Errors here don't undo the sync —
+  // categorization can run again next time. Logged for observability.
+  if (added.length > 0 || modified.length > 0) {
+    try {
+      const result = await autoCategorizeBusiness(item.businessId);
+      if (result.scanned > 0) {
+        console.log('autoCategorize', {
+          businessId: item.businessId,
+          ...result,
+        });
+      }
+    } catch (err) {
+      console.error('autoCategorizeBusiness failed', {
+        businessId: item.businessId,
+        err: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   return {
     added: added.length,

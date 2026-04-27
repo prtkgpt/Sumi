@@ -58,6 +58,11 @@ export const plaidItemStatus = pgEnum('plaid_item_status', [
 
 export const webhookProvider = pgEnum('webhook_provider', ['plaid']);
 
+export const categorizationSource = pgEnum('categorization_source', [
+  'user',
+  'llm',
+]);
+
 /**
  * App-side mirror of the authenticated user.
  * `stack_user_id` is the Stack Auth user id (kept as text since Stack issues opaque ids).
@@ -249,6 +254,7 @@ export const transactions = pgTable(
     categoryId: uuid('category_id').references(() => categories.id, {
       onDelete: 'set null',
     }),
+    categorySource: categorizationSource('category_source'),
     postedAt: timestamp('posted_at', { withTimezone: true }).notNull(),
     amountCents: bigint('amount_cents', { mode: 'number' }).notNull(),
     currency: text('currency').notNull().default('USD'),
@@ -306,6 +312,39 @@ export const webhookEvents = pgTable(
       t.provider,
       t.externalEventId
     ),
+  })
+);
+
+/**
+ * Per-business merchant → category mapping. Drives the v0.3 auto-categorization
+ * pipeline: when a Plaid transaction lands, we look up its normalized merchant
+ * here. `source='user'` rows (manual overrides) win over `source='llm'` rows
+ * via the unique key — see categorization layer for the upsert semantics.
+ */
+export const categorizationRules = pgTable(
+  'categorization_rules',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    businessId: uuid('business_id')
+      .notNull()
+      .references(() => businesses.id, { onDelete: 'cascade' }),
+    merchantNormalized: text('merchant_normalized').notNull(),
+    categoryId: uuid('category_id')
+      .notNull()
+      .references(() => categories.id, { onDelete: 'cascade' }),
+    source: categorizationSource('source').notNull(),
+    confidence: text('confidence'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => ({
+    bizMerchantIdx: uniqueIndex(
+      'categorization_rules_business_merchant_idx'
+    ).on(t.businessId, t.merchantNormalized),
   })
 );
 
@@ -403,3 +442,5 @@ export type Transaction = typeof transactions.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
 export type WebhookEvent = typeof webhookEvents.$inferSelect;
 export type NewWebhookEvent = typeof webhookEvents.$inferInsert;
+export type CategorizationRule = typeof categorizationRules.$inferSelect;
+export type NewCategorizationRule = typeof categorizationRules.$inferInsert;
