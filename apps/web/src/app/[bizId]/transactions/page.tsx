@@ -1,12 +1,12 @@
 import Link from 'next/link';
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, count, desc, eq, isNull } from 'drizzle-orm';
 import {
   getDb,
   transactions,
   financialAccounts,
   categories,
 } from '@sumi/db';
-import { Plus } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import {
@@ -21,6 +21,7 @@ import { requireBusiness } from '@/lib/auth/require-business';
 import { ensureCategorySeed } from '@/lib/categories';
 import { ConnectBankButton } from './connect-bank-button';
 import { CategoryPicker } from './category-picker';
+import { RecategorizeButton } from './recategorize-button';
 
 const PAGE_SIZE = 100;
 
@@ -57,7 +58,7 @@ export default async function InboxPage({
 
   const onlyUncategorized = filter === 'uncategorized';
 
-  const [accountCount, allCategories, rows] = await Promise.all([
+  const [accountCount, allCategories, rows, uncategorized] = await Promise.all([
     db
       .select({ id: financialAccounts.id })
       .from(financialAccounts)
@@ -81,6 +82,7 @@ export default async function InboxPage({
         description: transactions.description,
         source: transactions.source,
         categoryId: transactions.categoryId,
+        categorySource: transactions.categorySource,
         categoryName: categories.displayName,
         accountName: financialAccounts.name,
         accountMask: financialAccounts.mask,
@@ -101,19 +103,29 @@ export default async function InboxPage({
       )
       .orderBy(desc(transactions.postedAt))
       .limit(PAGE_SIZE),
+    db
+      .select({ n: count() })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.businessId, business.id),
+          isNull(transactions.categoryId)
+        )
+      ),
   ]);
 
   const hasAccounts = accountCount.length > 0;
   const hasTransactions = rows.length > 0;
   const showAccountWarning = need === 'account' && !hasAccounts;
+  const uncategorizedCount = uncategorized[0]?.n ?? 0;
 
   return (
     <div className="mx-auto max-w-6xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Inbox</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Transactions</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Review and categorize your transactions.
+            Review, categorize, and add transactions for your business.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -137,19 +149,30 @@ export default async function InboxPage({
         </Card>
       )}
 
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <Button asChild variant={onlyUncategorized ? 'ghost' : 'secondary'} size="sm">
-          <Link href={`/${business.id}/inbox`}>All</Link>
+          <Link href={`/${business.id}/transactions`}>All</Link>
         </Button>
         <Button
           asChild
           variant={onlyUncategorized ? 'secondary' : 'ghost'}
           size="sm"
         >
-          <Link href={`/${business.id}/inbox?filter=uncategorized`}>
+          <Link href={`/${business.id}/transactions?filter=uncategorized`}>
             Needs review
+            {uncategorizedCount > 0 && (
+              <span className="ml-1 text-muted-foreground">
+                ({uncategorizedCount})
+              </span>
+            )}
           </Link>
         </Button>
+        <div className="ml-auto">
+          <RecategorizeButton
+            bizId={business.id}
+            uncategorizedCount={uncategorizedCount}
+          />
+        </div>
       </div>
 
       {!hasTransactions ? (
@@ -205,12 +228,23 @@ export default async function InboxPage({
                     {r.accountMask ? ` ··${r.accountMask}` : ''}
                   </TableCell>
                   <TableCell>
-                    <CategoryPicker
-                      bizId={business.id}
-                      transactionId={r.id}
-                      currentCategoryId={r.categoryId}
-                      categories={allCategories}
-                    />
+                    <div className="flex items-center gap-2">
+                      <CategoryPicker
+                        bizId={business.id}
+                        transactionId={r.id}
+                        currentCategoryId={r.categoryId}
+                        categories={allCategories}
+                      />
+                      {r.categorySource === 'llm' && (
+                        <span
+                          title="Auto-categorized by Claude"
+                          className="inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700 dark:bg-violet-950/50 dark:text-violet-300"
+                        >
+                          <Sparkles className="size-3" />
+                          AI
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell
                     className={`text-right font-medium tabular-nums ${

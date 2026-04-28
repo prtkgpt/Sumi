@@ -9,7 +9,11 @@ import {
   financialAccounts,
   categories,
 } from '@sumi/db';
+import { revalidatePath } from 'next/cache';
 import { requireBusiness } from '@/lib/auth/require-business';
+import { normalizeMerchant } from '@/lib/categorization/normalize';
+import { upsertRule } from '@/lib/categorization/rules';
+import { autoCategorizeBusiness } from '@/lib/categorization/categorize';
 
 const Input = z.object({
   bizId: z.string().uuid(),
@@ -92,6 +96,7 @@ export async function createManualTransaction(
     businessId: business.id,
     accountId: account.id,
     categoryId,
+    categorySource: categoryId ? 'user' : null,
     postedAt: new Date(input.postedAt),
     amountCents: signed,
     currency: 'USD',
@@ -103,7 +108,7 @@ export async function createManualTransaction(
     createdByUserId: user.id,
   });
 
-  redirect(`/${business.id}/inbox`);
+  redirect(`/${business.id}/transactions`);
 }
 
 const SetCategoryInput = z.object({
@@ -137,10 +142,26 @@ export async function setTransactionCategory(formData: FormData) {
     if (!cat) throw new Error('Category not found');
   }
 
+  // Read merchant first so we can write a learned rule below.
+  const [txnRow] = await db
+    .select({
+      merchant: transactions.merchant,
+      description: transactions.description,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.id, parsed.transactionId),
+        eq(transactions.businessId, business.id)
+      )
+    )
+    .limit(1);
+
   await db
     .update(transactions)
     .set({
       categoryId: nextCategoryId,
+      categorySource: nextCategoryId ? 'user' : null,
       status: 'reviewed',
       updatedAt: new Date(),
     })
@@ -150,4 +171,65 @@ export async function setTransactionCategory(formData: FormData) {
         eq(transactions.businessId, business.id)
       )
     );
+
+  // Stage 3: when the user assigns a category, learn a rule. source='user'
+  // wins over source='llm' for the same merchant on future Plaid imports.
+  if (txnRow && nextCategoryId) {
+    const merchantKey = normalizeMerchant(txnRow.merchant ?? txnRow.description);
+    if (merchantKey) {
+      try {
+        await upsertRule({
+          businessId: business.id,
+          merchantNormalized: merchantKey,
+          categoryId: nextCategoryId,
+          source: 'user',
+        });
+      } catch (err) {
+        console.error('upsertRule (user override) failed', err);
+      }
+    }
+  }
+}
+
+const RecategorizeInput = z.object({
+  bizId: z.string().uuid(),
+});
+
+export type RecategorizeState = {
+  ruleHits?: number;
+  llmHits?: number;
+  llmMisses?: number;
+  scanned?: number;
+  error?: string;
+};
+
+/**
+ * Manual trigger that runs the categorization orchestrator across the
+ * business's uncategorized transactions. Bounded per call by the
+ * orchestrator (MAX_TRANSACTIONS_PER_RUN); the button can be clicked
+ * again to keep chipping away at large backlogs.
+ */
+export async function recategorizeUncategorized(
+  _prev: RecategorizeState,
+  formData: FormData
+): Promise<RecategorizeState> {
+  let parsed: z.infer<typeof RecategorizeInput>;
+  try {
+    parsed = RecategorizeInput.parse({ bizId: formData.get('bizId') });
+  } catch {
+    return { error: 'Invalid request' };
+  }
+
+  const { business } = await requireBusiness(parsed.bizId);
+
+  try {
+    const result = await autoCategorizeBusiness(business.id);
+    revalidatePath(`/${business.id}/transactions`);
+    return result;
+  } catch (err) {
+    console.error('recategorizeUncategorized failed', err);
+    return {
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
+  }
 }

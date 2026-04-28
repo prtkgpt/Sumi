@@ -40,18 +40,16 @@ export default async function NewTransactionPage({
   ]);
 
   if (accounts.length === 0) {
-    // Manual entry needs at least one account. Send the user to the inbox
-    // where the empty state offers Connect-bank or Add-account flows. (For
-    // v0.2 we'll auto-create a "Cash" manual_cash account on demand from
-    // the inbox if none exists; that path lives in the Inbox component.)
-    redirect(`/${business.id}/inbox?need=account`);
+    // Manual entry needs at least one account. Send the user back to the
+    // transactions list where the empty state offers Connect-bank.
+    redirect(`/${business.id}/transactions?need=account`);
   }
 
   return (
     <div className="mx-auto max-w-xl">
       <h1 className="text-2xl font-semibold tracking-tight">Add transaction</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        Manual entries appear in the inbox alongside imported transactions.
+        Manual entries appear alongside imported transactions.
       </p>
       <div className="mt-8">
         <TransactionForm

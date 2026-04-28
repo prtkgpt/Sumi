@@ -13,6 +13,17 @@ export const env = createEnv({
     ENCRYPTION_KEY: z
       .string()
       .regex(/^[0-9a-fA-F]{64}$/, 'ENCRYPTION_KEY must be 32 bytes hex (64 chars)'),
+    ANTHROPIC_API_KEY: z.string().min(1),
+    // Optional: invoicing falls back to "Mark paid" only when Stripe is
+    // unconfigured. Both must be set together for hosted card payments.
+    STRIPE_SECRET_KEY: z.string().min(1).optional(),
+    STRIPE_WEBHOOK_SECRET: z.string().min(1).optional(),
+    // Optional: receipt uploads need Vercel Blob storage. The token is
+    // auto-provisioned when you add a Blob store to the Vercel project.
+    BLOB_READ_WRITE_TOKEN: z.string().min(1).optional(),
+    // Optional: outbound email via Resend. Currently a placeholder; future
+    // features (invoice email, password reset) will use it.
+    RESEND_API_KEY: z.string().min(1).optional(),
   },
   client: {
     NEXT_PUBLIC_STACK_PROJECT_ID: z.string().min(1),
@@ -26,6 +37,11 @@ export const env = createEnv({
     PLAID_SECRET: process.env.PLAID_SECRET,
     PLAID_ENV: process.env.PLAID_ENV,
     ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+    ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
+    STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+    BLOB_READ_WRITE_TOKEN: process.env.BLOB_READ_WRITE_TOKEN,
+    RESEND_API_KEY: process.env.RESEND_API_KEY,
     NEXT_PUBLIC_STACK_PROJECT_ID: process.env.NEXT_PUBLIC_STACK_PROJECT_ID,
     NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY:
       process.env.NEXT_PUBLIC_STACK_PUBLISHABLE_CLIENT_KEY,

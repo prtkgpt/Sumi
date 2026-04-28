@@ -15,6 +15,55 @@
       "when": 1777260982342,
       "tag": "0001_tiny_mephistopheles",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777263892835,
+      "tag": "0002_great_sumo",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777264215099,
+      "tag": "0003_flowery_mantis",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777265839302,
+      "tag": "0004_furry_stature",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1777266802328,
+      "tag": "0005_cute_shadow_king",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777267283834,
+      "tag": "0006_silly_cobalt_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1777283176786,
+      "tag": "0007_special_roxanne_simpson",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1777325655485,
+      "tag": "0008_shallow_jack_flag",
+      "breakpoints": true
     }
   ]
 }

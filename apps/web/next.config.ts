@@ -2,9 +2,7 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  experimental: {
-    typedRoutes: false,
-  },
+  typedRoutes: false,
   transpilePackages: ['@sumi/db', '@sumi/types'],
 };
 

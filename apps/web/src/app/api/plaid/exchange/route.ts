@@ -59,6 +59,7 @@ export async function POST(req: Request) {
       })
       .returning({ id: plaidItems.id });
 
+    const now = new Date();
     const accountRows: NewFinancialAccount[] = accountsResp.data.accounts.map(
       (a) => ({
         businessId: business.id,
@@ -68,6 +69,9 @@ export async function POST(req: Request) {
         name: a.name,
         mask: a.mask,
         institutionName: parsed.institution?.name ?? null,
+        currentBalanceCents: dollarsToCents(a.balances.current),
+        availableBalanceCents: dollarsToCents(a.balances.available),
+        lastBalanceAt: now,
       })
     );
     if (accountRows.length > 0) {
@@ -102,4 +106,9 @@ function mapKind(
   // Default unclassified depository accounts to checking; manual_cash is
   // reserved for user-created accounts.
   return 'bank_checking';
+}
+
+function dollarsToCents(value: number | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  return Math.round(value * 100);
 }

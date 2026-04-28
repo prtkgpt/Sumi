@@ -13,6 +13,7 @@ import {
 } from 'plaid';
 import { getPlaidClient } from './client';
 import { decryptString } from '@/lib/crypto';
+import { autoCategorizeBusiness } from '@/lib/categorization/categorize';
 
 type SyncResult = {
   added: number;
@@ -63,6 +64,37 @@ export async function syncItem(itemRowId: string): Promise<SyncResult> {
   }
 
   await applyChanges(item, added, modified, removed, cursor ?? null);
+
+  // Refresh account balances. Cheap (one /accounts/get round-trip) and
+  // ensures the dashboard's cash-on-hand tile stays current. Errors are
+  // logged but don't undo the sync — balances will refresh next time.
+  try {
+    await refreshBalances(item, accessToken);
+  } catch (err) {
+    console.error('refreshBalances failed', {
+      itemId: item.id,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // Always run categorization. The orchestrator only acts on uncategorized
+  // rows and is bounded per call, so re-running on a sync that produced no
+  // new Plaid rows still picks up any previously-skipped transactions
+  // (e.g. ones imported before ANTHROPIC_API_KEY was set, or before v0.3).
+  try {
+    const result = await autoCategorizeBusiness(item.businessId);
+    if (result.scanned > 0) {
+      console.log('autoCategorize', {
+        businessId: item.businessId,
+        ...result,
+      });
+    }
+  } catch (err) {
+    console.error('autoCategorizeBusiness failed', {
+      businessId: item.businessId,
+      err: err instanceof Error ? err.message : String(err),
+    });
+  }
 
   return {
     added: added.length,
@@ -157,4 +189,37 @@ function postedAtFor(t: PlaidTransaction): Date {
   // appear at the time they were made.
   const iso = t.authorized_date ?? t.date;
   return new Date(iso);
+}
+
+async function refreshBalances(
+  item: PlaidItem,
+  accessToken: string
+): Promise<void> {
+  const plaid = getPlaidClient();
+  const resp = await plaid.accountsGet({ access_token: accessToken });
+
+  const db = getDb();
+  const now = new Date();
+  for (const a of resp.data.accounts) {
+    await db
+      .update(financialAccounts)
+      .set({
+        currentBalanceCents:
+          a.balances.current === null || a.balances.current === undefined
+            ? null
+            : Math.round(a.balances.current * 100),
+        availableBalanceCents:
+          a.balances.available === null || a.balances.available === undefined
+            ? null
+            : Math.round(a.balances.available * 100),
+        lastBalanceAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(financialAccounts.plaidItemId, item.id),
+          eq(financialAccounts.plaidAccountId, a.account_id)
+        )
+      );
+  }
 }
